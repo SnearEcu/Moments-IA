@@ -1,8 +1,9 @@
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, send_from_directory, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func, select
 from sqlalchemy.orm import with_parent
-
+import os
+import requests
 from moments.core.extensions import db
 from moments.decorators import confirm_required, permission_required
 from moments.forms.main import CommentForm, DescriptionForm, TagForm
@@ -426,3 +427,78 @@ def delete_tag(photo_id, tag_id):
 
     flash('Tag deleted.', 'info')
     return redirect(url_for('.show_photo', photo_id=photo_id))
+
+
+# Configuración de la API de Azure
+AZURE_ENDPOINT1 = 'https://maestriayachay.cognitiveservices.azure.com/vision/v3.0/describe'
+AZURE_SUBSCRIPTION_KEY = '2F54M87YQt6vNtfBKP1EUTIqByV71csVGSlb2mVQ37SZEapPwOu9JQQJ99BCACYeBjFXJ3w3AAAFACOG6XhS'
+
+@main_bp.route('/auto_description/<int:photo_id>', methods=['POST'])
+@login_required
+def auto_description(photo_id):
+    print("Prueba ****************")
+    photo = Photo.query.get_or_404(photo_id)
+    if current_user != photo.author:
+        abort(403)
+    
+    # Ruta de la imagen local
+    image_path = os.path.join(current_app.root_path, '..', 'uploads', photo.filename)
+    
+    # Llama a la API de Azure Computer Vision
+    headers = {
+        'Ocp-Apim-Subscription-Key': AZURE_SUBSCRIPTION_KEY,
+        'Content-Type': 'application/octet-stream'
+    }
+    
+    try:
+        with open(image_path, 'rb') as image_file:
+            response = requests.post(AZURE_ENDPOINT1, headers=headers, data=image_file)
+        response.raise_for_status()
+        analysis = response.json()
+        print(analysis)
+        # Obtiene la descripción de la respuesta
+        description = analysis['description']['captions'][0]['text'] if analysis['description']['captions'] else 'No description available'
+    except Exception as e:
+        #Imprimir el error en la consola
+        print(e)
+        print("Errpr")
+        description = 'Descripción no disponible'
+    
+    return jsonify(description=description)
+
+    main_bp = Blueprint('main', __name__)
+
+# Configuración de la API de Azure
+AZURE_ENDPOINT = 'https://maestriayachay.cognitiveservices.azure.com/vision/v3.0/tag'
+AZURE_SUBSCRIPTION_KEY = '2F54M87YQt6vNtfBKP1EUTIqByV71csVGSlb2mVQ37SZEapPwOu9JQQJ99BCACYeBjFXJ3w3AAAFACOG6XhS'
+
+@main_bp.route('/auto_tags/<int:photo_id>', methods=['POST'])
+@login_required
+def auto_tags(photo_id):
+    photo = Photo.query.get_or_404(photo_id)
+    if current_user != photo.author:
+        abort(403)
+    
+    # Ruta de la imagen local
+    image_path = os.path.join(current_app.root_path, '..', 'uploads', photo.filename)
+    
+    # Llama a la API de Azure Computer Vision para obtener etiquetas
+    headers = {
+        'Ocp-Apim-Subscription-Key': AZURE_SUBSCRIPTION_KEY,
+        'Content-Type': 'application/octet-stream'
+    }
+    
+    try:
+        with open(image_path, 'rb') as image_file:
+            response = requests.post(AZURE_ENDPOINT, headers=headers, data=image_file)
+        response.raise_for_status()
+        analysis = response.json()
+        
+        # Obtiene las etiquetas de la respuesta
+        tags = [{'name': tag['name'], 'id': tag['name']} for tag in analysis['tags'][:3]]
+    except Exception as e:
+        # Imprimir el error en la consola
+        print(e)
+        tags = []
+    
+    return jsonify(tags=tags)

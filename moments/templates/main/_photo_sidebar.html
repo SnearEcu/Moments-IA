@@ -51,6 +51,7 @@
         {{ description_form.csrf_token }}
         {{ render_field(description_form.description) }}
         <a class="btn btn-light btn-sm" id="cancel-description">Cancel</a>
+        <button type="button" class="btn btn-info btn-sm" id="auto-description">Auto asDescription</button>
         {{ render_field(description_form.submit, class='btn-success btn-sm description-submit-btn') }}
       </form>
     </div>
@@ -72,6 +73,7 @@
         </a>
         {% endif %}
       </p>
+      
     </div>
     {% if current_user == photo.author %}
     <div id="tag-form">
@@ -79,6 +81,7 @@
         {{ tag_form.csrf_token }}
         {{ render_field(tag_form.tag) }}
         <a class="btn btn-light btn-sm" id="cancel-tag">Cancel</a>
+        <button type="button" class="btn btn-info btn-sm" id="auto-tags">Auto Tags</button>
         {{ render_field(tag_form.submit, class='btn btn-success btn-sm') }}
       </form>
       {% if photo.tags %}
@@ -100,3 +103,36 @@
     {% endif %}
   </div>
 </div>
+
+<script>
+document.getElementById('auto-description').addEventListener('click', function() {
+  fetch('{{ url_for(".auto_description", photo_id=photo.id) }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    document.querySelector('textarea[name="description"]').value = data.description;
+  })
+  .catch(error => console.error('Error:', error));
+});
+
+document.getElementById('auto-tags').addEventListener('click', function() {
+  fetch('{{ url_for(".auto_tags", photo_id=photo.id) }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    const tagsTextarea = document.querySelector('input[name="tag"]');
+    tagsTextarea.value = data.tags.map(tag => tag.name).join(' ');
+  })
+  .catch(error => console.error('Error:', error));
+});
+</script>
